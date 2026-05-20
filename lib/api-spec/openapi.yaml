@@ -1,22 +1,31 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: ClearGlass Fraud Detection Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: transactions
+    description: Transaction operations
+  - name: alerts
+    description: Fraud alert operations
+  - name: models
+    description: ML model performance
+  - name: dashboard
+    description: Dashboard summary statistics
+  - name: synthetic
+    description: Synthetic data generation
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +33,476 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List transactions with optional filters
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [all, fraud, legitimate, review] }
+        - name: minAmount
+          in: query
+          schema: { type: number }
+        - name: maxAmount
+          in: query
+          schema: { type: number }
+      responses:
+        "200":
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionList"
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      summary: Submit a transaction for fraud analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "201":
+          description: Transaction created and analyzed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
+  /transactions/{id}:
+    get:
+      operationId: getTransaction
+      tags: [transactions]
+      summary: Get transaction details with XAI explanation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Transaction with explanation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionDetail"
+        "404":
+          description: Not found
+
+  /transactions/{id}/review:
+    patch:
+      operationId: reviewTransaction
+      tags: [transactions]
+      summary: Update transaction review status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewInput"
+      responses:
+        "200":
+          description: Updated transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [alerts]
+      summary: List active fraud alerts
+      parameters:
+        - name: severity
+          in: query
+          schema: { type: string, enum: [all, critical, high, medium, low] }
+        - name: resolved
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Alert"
+    post:
+      operationId: createAlert
+      tags: [alerts]
+      summary: Create a fraud alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertInput"
+      responses:
+        "201":
+          description: Alert created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+
+  /alerts/{id}/resolve:
+    patch:
+      operationId: resolveAlert
+      tags: [alerts]
+      summary: Mark an alert as resolved
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Resolved alert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+
+  /models:
+    get:
+      operationId: listModels
+      tags: [models]
+      summary: List ML model configurations and metadata
+      responses:
+        "200":
+          description: List of models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Model"
+
+  /models/{id}/metrics:
+    get:
+      operationId: getModelMetrics
+      tags: [models]
+      summary: Get detailed performance metrics for a model
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Model metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelMetrics"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get aggregated dashboard KPIs
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Get recent transaction activity feed
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /dashboard/fraud-trend:
+    get:
+      operationId: getFraudTrend
+      tags: [dashboard]
+      summary: Get fraud vs legitimate transaction counts over time
+      responses:
+        "200":
+          description: Daily fraud trend data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrendPoint"
+
+  /dashboard/category-breakdown:
+    get:
+      operationId: getCategoryBreakdown
+      tags: [dashboard]
+      summary: Get fraud counts grouped by transaction category
+      responses:
+        "200":
+          description: Category breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryBreakdown"
+
+  /synthetic/jobs:
+    get:
+      operationId: listSyntheticJobs
+      tags: [synthetic]
+      summary: List synthetic data generation jobs
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SyntheticJob"
+    post:
+      operationId: createSyntheticJob
+      tags: [synthetic]
+      summary: Start a new synthetic data generation job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyntheticJobInput"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyntheticJob"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
-          type: string
-      required:
-        - status
+        status: { type: string }
 
+    Transaction:
+      type: object
+      required: [id, amount, category, merchantName, cardLast4, timestamp, fraudScore, status, reviewStatus]
+      properties:
+        id: { type: integer }
+        amount: { type: number }
+        category: { type: string }
+        merchantName: { type: string }
+        cardLast4: { type: string }
+        timestamp: { type: string }
+        fraudScore: { type: number, description: "0.0 to 1.0 fraud probability" }
+        status: { type: string, enum: [fraud, legitimate, review] }
+        reviewStatus: { type: string, enum: [pending, confirmed, cleared] }
+        country: { type: string }
+        ipAddress: { type: ["string", "null"] }
+
+    TransactionDetail:
+      type: object
+      required: [transaction, explanation]
+      properties:
+        transaction:
+          $ref: "#/components/schemas/Transaction"
+        explanation:
+          $ref: "#/components/schemas/XAIExplanation"
+
+    TransactionList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    TransactionInput:
+      type: object
+      required: [amount, category, merchantName, cardLast4, country]
+      properties:
+        amount: { type: number }
+        category: { type: string }
+        merchantName: { type: string }
+        cardLast4: { type: string }
+        country: { type: string }
+        ipAddress: { type: string }
+
+    ReviewInput:
+      type: object
+      required: [reviewStatus]
+      properties:
+        reviewStatus: { type: string, enum: [confirmed, cleared] }
+
+    XAIExplanation:
+      type: object
+      required: [method, features, summary]
+      properties:
+        method: { type: string, enum: [SHAP, LIME] }
+        summary: { type: string }
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeatureContribution"
+
+    FeatureContribution:
+      type: object
+      required: [feature, value, contribution, direction]
+      properties:
+        feature: { type: string }
+        value: { type: string }
+        contribution: { type: number }
+        direction: { type: string, enum: [positive, negative] }
+
+    Alert:
+      type: object
+      required: [id, title, description, severity, transactionId, createdAt, resolved]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        severity: { type: string, enum: [critical, high, medium, low] }
+        transactionId: { type: ["integer", "null"] }
+        createdAt: { type: string }
+        resolved: { type: boolean }
+        resolvedAt: { type: ["string", "null"] }
+
+    AlertInput:
+      type: object
+      required: [title, description, severity]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        severity: { type: string, enum: [critical, high, medium, low] }
+        transactionId: { type: integer }
+
+    Model:
+      type: object
+      required: [id, name, type, version, isActive, trainedAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        type: { type: string, enum: [XGBoost, LightGBM, CatBoost, IsolationForest, Ensemble] }
+        version: { type: string }
+        isActive: { type: boolean }
+        trainedAt: { type: string }
+        description: { type: string }
+
+    ModelMetrics:
+      type: object
+      required: [modelId, accuracy, aucRoc, precision, recall, f1Score, prAuc]
+      properties:
+        modelId: { type: integer }
+        accuracy: { type: number }
+        aucRoc: { type: number }
+        precision: { type: number }
+        recall: { type: number }
+        f1Score: { type: number }
+        prAuc: { type: number }
+        confusionMatrix:
+          type: object
+          properties:
+            tp: { type: integer }
+            fp: { type: integer }
+            tn: { type: integer }
+            fn: { type: integer }
+
+    DashboardSummary:
+      type: object
+      required: [totalTransactions, fraudDetected, totalAlerts, activeAlerts, fraudRate, avgFraudScore, investigationTurnaround, totalAmountAtRisk]
+      properties:
+        totalTransactions: { type: integer }
+        fraudDetected: { type: integer }
+        totalAlerts: { type: integer }
+        activeAlerts: { type: integer }
+        fraudRate: { type: number }
+        avgFraudScore: { type: number }
+        investigationTurnaround: { type: number, description: "Average hours to resolve" }
+        totalAmountAtRisk: { type: number }
+
+    ActivityItem:
+      type: object
+      required: [id, type, message, timestamp, severity]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [fraud_detected, alert_created, transaction_cleared, model_updated, synthetic_completed] }
+        message: { type: string }
+        timestamp: { type: string }
+        severity: { type: string, enum: [critical, high, medium, low, info] }
+        transactionId: { type: ["integer", "null"] }
+
+    TrendPoint:
+      type: object
+      required: [date, fraudCount, legitimateCount, totalAmount]
+      properties:
+        date: { type: string }
+        fraudCount: { type: integer }
+        legitimateCount: { type: integer }
+        totalAmount: { type: number }
+
+    CategoryBreakdown:
+      type: object
+      required: [category, fraudCount, legitimateCount, fraudRate]
+      properties:
+        category: { type: string }
+        fraudCount: { type: integer }
+        legitimateCount: { type: integer }
+        fraudRate: { type: number }
+
+    SyntheticJob:
+      type: object
+      required: [id, method, rowCount, fraudRate, status, createdAt]
+      properties:
+        id: { type: integer }
+        method: { type: string, enum: [GAN, VAE, SMOTE, ADASYN, Faker] }
+        rowCount: { type: integer }
+        fraudRate: { type: number }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        createdAt: { type: string }
+        completedAt: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+
+    SyntheticJobInput:
+      type: object
+      required: [method, rowCount, fraudRate]
+      properties:
+        method: { type: string, enum: [GAN, VAE, SMOTE, ADASYN, Faker] }
+        rowCount: { type: integer, minimum: 100, maximum: 100000 }
+        fraudRate: { type: number, minimum: 0.001, maximum: 0.5 }
+        notes: { type: string }
